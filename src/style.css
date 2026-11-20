@@ -126,7 +126,7 @@ input:read-only { background: #f4ecd6; }
 .row.end { justify-content: flex-end; }
 .chip.emoji { font-size: 26px; padding: 0 10px; min-width: 52px; }
 .photo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.photo-preview .thumb { width: 72px; height: 72px; }
+.photo-preview .thumb { width: 96px; height: 96px; }
 .form-error { color: var(--red); min-height: 1.3em; font-weight: 700; }
 
 /* parent mode */

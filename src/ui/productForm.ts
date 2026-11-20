@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { DEFAULT_EMOJI, type Product } from '../core/catalog';
 import { centsToAmountText, parsePrice } from '../core/money';
 import { button, h, thumb } from './dom';
-import { downscalePhoto } from './photo';
+import { processPhoto } from './photo';
 
 export interface FormProps {
   /** Starting values; `editing` locks the code field (the code identifies the product). */
@@ -47,19 +47,35 @@ export function renderProductForm(p: FormProps): HTMLElement {
 
   const error = h('div', 'form-error');
   const preview = h('div', 'photo-preview');
-  const renderPreview = (): void => { preview.replaceChildren(thumb({ emoji: emoji.value || DEFAULT_EMOJI, photo })); };
+  const takeButton = button('', 'chip primary', () => camera.click());
+  const renderPreview = (): void => {
+    preview.replaceChildren(thumb({ emoji: emoji.value || DEFAULT_EMOJI, photo }));
+    takeButton.textContent = photo ? t('retakePhoto') : t('takePhoto');
+  };
   renderPreview();
   emoji.addEventListener('input', renderPreview);
 
-  const file = h('input');
-  file.type = 'file';
-  file.accept = 'image/*';
-  file.hidden = true;
-  file.addEventListener('change', () => {
-    const f = file.files?.[0];
-    if (!f) return;
-    downscalePhoto(f).then((url) => { photo = url; renderPreview(); }).catch(() => { /* keep the old picture */ });
-  });
+  // Two hidden pickers: `capture` opens the camera directly on iPad (other browsers just show a file dialog).
+  const picker = (capture: boolean): HTMLInputElement => {
+    const input = h('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    if (capture) input.setAttribute('capture', 'environment');
+    input.hidden = true;
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      input.value = ''; // so taking the same picture again still fires `change`
+      if (!f) return;
+      processPhoto(f).then((url) => {
+        photo = url;
+        renderPreview();
+        if (name.value.trim() === '') name.focus();
+      }).catch(() => { /* keep the old picture */ });
+    });
+    return input;
+  };
+  const camera = picker(true);
+  const library = picker(false);
 
   const chips = h('div', 'chips', ...SUGGESTED_EMOJI.map((e) =>
     button(e, 'chip emoji', () => { emoji.value = e; renderPreview(); })));
@@ -77,19 +93,20 @@ export function renderProductForm(p: FormProps): HTMLElement {
   }
 
   const photoRow = h('div', 'photo-row', preview,
-    button(t('choosePhoto'), 'chip', () => file.click()),
+    takeButton,
+    button(t('choosePhoto'), 'chip', () => library.click()),
     button(t('removePhoto'), 'chip', () => { photo = undefined; renderPreview(); }),
-    file);
+    camera, library);
 
   const root = h('div', 'overlay',
     h('div', 'modal form',
       h('h2', '', p.editing ? t('formTitleEdit') : t('formTitleNew')),
+      photoRow,
       field(t('fieldCode'), code),
       field(t('fieldName'), name),
       field(t('fieldPrice'), price),
       field(t('fieldEmoji'), emoji),
       chips,
-      photoRow,
       error,
       h('div', 'modal-actions', button(t('cancel'), 'big ghost', p.onCancel), button(t('save'), 'big primary', save)),
     ));

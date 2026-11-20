@@ -52,6 +52,8 @@ export const sl = {
   fieldName: 'Ime',
   fieldPrice: 'Cena (€)',
   fieldEmoji: 'Slika (emoji)',
+  takePhoto: '📷 Slikaj izdelek',
+  retakePhoto: '📷 Slikaj znova',
   choosePhoto: 'Izberi fotografijo',
   removePhoto: 'Odstrani fotografijo',
   save: 'Shrani',
