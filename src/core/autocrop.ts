@@ -1,10 +1,10 @@
 // Auto-crop for product photos: finds the product in a (small) RGBA image and returns a square around it.
 // Pure pixel math (no canvas), so it is unit-testable; src/ui/photo.ts feeds it a downscaled copy of the photo.
 //
-// Idea: the background is whatever color the frame border mostly has (table, shelf, wall). Pixels that differ
-// clearly from it are "product". The product is the largest such blob, preferring one near the center, so a
-// stray hand or a neighbouring item at the edge does not pull the crop away. If nothing convincing is found
-// the result is a plain center crop, which is what the app did before.
+// Idea: whatever colors the frame border is made of (table, wood grain, shelf, wall) is "background". A pixel whose
+// color barely occurs along the border is "product". The product is the largest such blob, preferring one near the
+// center, so a stray hand or a neighbouring item at the edge does not pull the crop away. If nothing convincing
+// is found the result is a mild center crop (products are usually framed in the middle).
 
 export interface Pixels {
   /** RGBA bytes, row-major (like `ImageData.data`). */
@@ -15,65 +15,88 @@ export interface Pixels {
 
 export interface Square { x: number; y: number; size: number }
 
-/** Smallest color distance (0-441, Euclidean RGB) from the background that counts as product. */
-const MIN_DISTANCE = 40;
-/** The bar adapts to a noisy border but never rises above this. */
-const MAX_DISTANCE = 100;
+/** A color counts as background if at least this fraction of the border pixels has (nearly) that color. */
+const MIN_BORDER_SHARE = 0.004;
 /** The product must cover at least this fraction of the frame, otherwise it is probably noise. */
 const MIN_AREA = 0.02;
 /** ...and its box must span at least this fraction of the short side. */
 const MIN_SPAN = 0.15;
+/** A box spanning more than this in both directions means background and product could not be told apart. */
+const MAX_SPAN = 0.92;
 /** Margin added around the product, as a fraction of its size. */
 const PADDING = 0.08;
+/** Fallback crop: this fraction of the short side, centered. */
+const FALLBACK_SCALE = 0.85;
 
-export function centerSquare(width: number, height: number): Square {
-  const size = Math.min(width, height);
+export function centerSquare(width: number, height: number, scale = 1): Square {
+  const short = Math.min(width, height);
+  const size = Math.round(short * scale);
   return { x: Math.floor((width - size) / 2), y: Math.floor((height - size) / 2), size };
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+/** Color bucket: 16 levels per channel. */
+function bucket(r: number, g: number, b: number): number {
+  return ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+}
+
+/** For every bucket, how many border pixels fall into it or a neighbouring bucket (so shading does not matter). */
+function borderColorCounts(border: number[]): Int32Array {
+  const exact = new Int32Array(4096);
+  for (const k of border) exact[k]!++;
+  const near = new Int32Array(4096);
+  for (let k = 0; k < 4096; k++) {
+    const r = k >> 8, g = (k >> 4) & 15, b = k & 15;
+    let sum = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dg = -1; dg <= 1; dg++) {
+        for (let db = -1; db <= 1; db++) {
+          const rr = r + dr, gg = g + dg, bb = b + db;
+          if (rr < 0 || gg < 0 || bb < 0 || rr > 15 || gg > 15 || bb > 15) continue;
+          sum += exact[(rr << 8) | (gg << 4) | bb]!;
+        }
+      }
+    }
+    near[k] = sum;
+  }
+  return near;
 }
 
 export function autoCropSquare({ data, width, height }: Pixels): Square {
-  const fallback = centerSquare(width, height);
+  const fallback = centerSquare(width, height, FALLBACK_SCALE);
   const n = width * height;
   if (n === 0 || data.length < n * 4) return fallback;
 
-  // Background color = per-channel median of a ring along the frame border.
-  const ring = Math.max(1, Math.round(Math.min(width, height) * 0.05));
+  const ring = Math.max(1, Math.round(Math.min(width, height) * 0.06));
   const isBorder = (x: number, y: number): boolean => x < ring || y < ring || x >= width - ring || y >= height - ring;
-  const border: number[][] = [[], [], []];
+  const colors = new Int16Array(n);
+  const border: number[] = [];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (!isBorder(x, y)) continue;
-      const i = (y * width + x) * 4;
-      for (let c = 0; c < 3; c++) border[c]!.push(data[i + c]!);
+      const i = y * width + x;
+      colors[i] = bucket(data[i * 4]!, data[i * 4 + 1]!, data[i * 4 + 2]!);
+      if (isBorder(x, y)) border.push(colors[i]!);
     }
   }
-  const bg = border.map(median);
+  const near = borderColorCounts(border);
+  const minCount = Math.max(2, border.length * MIN_BORDER_SHARE);
+  const raw = new Uint8Array(n);
+  for (let i = 0; i < n; i++) raw[i] = near[colors[i]!]! < minCount ? 1 : 0;
 
-  const dist = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const dr = data[i * 4]! - bg[0]!;
-    const dg = data[i * 4 + 1]! - bg[1]!;
-    const db = data[i * 4 + 2]! - bg[2]!;
-    dist[i] = Math.sqrt(dr * dr + dg * dg + db * db);
+  // Majority filter: busy backgrounds leave speckles, real products are solid areas.
+  const m = Math.max(1, Math.round(Math.min(width, height) * 0.03));
+  const fg = new Uint8Array(n);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let on = 0, total = 0;
+      for (let yy = Math.max(0, y - m); yy <= Math.min(height - 1, y + m); yy++) {
+        for (let xx = Math.max(0, x - m); xx <= Math.min(width - 1, x + m); xx++) { on += raw[yy * width + xx]!; total++; }
+      }
+      fg[y * width + x] = on * 2 > total ? 1 : 0;
+    }
   }
 
-  // A noisy or gradient border needs a higher bar than a flat one: 1.5x the 70th percentile of its own spread.
-  // (Not higher: a stray object touching the border must not raise the bar until nothing passes it.)
-  const borderDist: number[] = [];
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (isBorder(x, y)) borderDist.push(dist[y * width + x]!);
-  borderDist.sort((a, b) => a - b);
-  const threshold = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, 1.5 * (borderDist[Math.floor(borderDist.length * 0.7)] ?? 0)));
-
-  const fg = new Uint8Array(n);
-  for (let i = 0; i < n; i++) fg[i] = dist[i]! > threshold ? 1 : 0;
-
-  // Dilate so label text, gaps and highlights on one product join into a single blob.
-  const r = Math.max(1, Math.round(Math.min(width, height) * 0.02));
+  // Dilate a little so label text, gaps and highlights on one product join into a single blob.
+  const r = Math.max(1, Math.round(Math.min(width, height) * 0.015));
   const grown = new Uint8Array(n);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -123,6 +146,7 @@ export function autoCropSquare({ data, width, height }: Pixels): Square {
   const boxH = best.y1 - best.y0 + 1;
   const short = Math.min(width, height);
   if (Math.max(boxW, boxH) < short * MIN_SPAN) return fallback;
+  if (boxW > width * MAX_SPAN && boxH > height * MAX_SPAN) return fallback;
 
   const size = Math.min(short, Math.round(Math.max(boxW, boxH) * (1 + 2 * PADDING)));
   const cx = (best.x0 + best.x1 + 1) / 2;

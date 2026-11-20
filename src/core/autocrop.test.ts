@@ -21,10 +21,50 @@ const WHITE: Rgb = [235, 232, 225];
 const RED: Rgb = [200, 40, 40];
 const BLUE: Rgb = [30, 60, 190];
 
+/** Deterministic pseudo-random noise in [-1, 1]. */
+function noise(x: number, y: number): number {
+  const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return (v - Math.floor(v)) * 2 - 1;
+}
+
+/** Wooden table with grain, uneven lighting and sensor noise; a printed product (red box, white label) on it. */
+function woodenTable(width: number, height: number, product: { x: number; y: number; w: number; h: number }): Pixels {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inside = x >= product.x && x < product.x + product.w && y >= product.y && y < product.y + product.h;
+      const label = inside && x > product.x + product.w * 0.2 && x < product.x + product.w * 0.8 && y > product.y + product.h * 0.35 && y < product.y + product.h * 0.6;
+      let rgb: Rgb;
+      if (label) rgb = [240, 238, 230];
+      else if (inside) rgb = [190, 45, 50];
+      else {
+        const grain = Math.sin(y * 0.9 + Math.sin(x * 0.15) * 2) * 22 + Math.sin(y * 2.3) * 8;
+        const light = (x / width - 0.5) * 50; // brighter on one side
+        rgb = [150 + grain + light, 104 + grain * 0.8 + light * 0.8, 62 + grain * 0.5 + light * 0.5];
+      }
+      const n = noise(x, y) * 10;
+      data.set([rgb[0] + n, rgb[1] + n, rgb[2] + n, 255], (y * width + x) * 4);
+    }
+  }
+  return { data, width, height };
+}
+
 describe('autoCropSquare', () => {
+  it('finds a product on a wooden table with grain', () => {
+    const product = { x: 38, y: 20, w: 28, h: 55 };
+    const sq = autoCropSquare(woodenTable(128, 96, product));
+    expect(sq.size).toBeLessThan(88); // clearly tighter than the 96px short side
+    expect(sq.size).toBeGreaterThanOrEqual(55);
+    expect(sq.x).toBeLessThanOrEqual(product.x);
+    expect(sq.x + sq.size).toBeGreaterThanOrEqual(product.x + product.w);
+    expect(sq.y).toBeLessThanOrEqual(product.y);
+    expect(sq.y + sq.size).toBeGreaterThanOrEqual(product.y + product.h);
+  });
+
   it('center-crops when there is no product to find', () => {
-    expect(autoCropSquare(image(120, 80, WHITE))).toEqual(centerSquare(120, 80));
-    expect(centerSquare(120, 80)).toEqual({ x: 20, y: 0, size: 80 });
+    const fallback = centerSquare(120, 80, 0.85);
+    expect(autoCropSquare(image(120, 80, WHITE))).toEqual(fallback);
+    expect(fallback).toEqual({ x: 26, y: 6, size: 68 });
   });
 
   it('crops around a product in the middle of a wider photo', () => {
@@ -39,12 +79,12 @@ describe('autoCropSquare', () => {
   });
 
   it('stays inside the photo when the product is near an edge', () => {
-    const sq = autoCropSquare(image(160, 120, WHITE, [{ x: 4, y: 40, w: 50, h: 50, color: RED }]));
+    const sq = autoCropSquare(image(160, 120, WHITE, [{ x: 9, y: 40, w: 50, h: 50, color: RED }]));
     expect(sq.x).toBeGreaterThanOrEqual(0);
     expect(sq.y).toBeGreaterThanOrEqual(0);
     expect(sq.x + sq.size).toBeLessThanOrEqual(160);
     expect(sq.y + sq.size).toBeLessThanOrEqual(120);
-    expect(sq.x).toBeLessThanOrEqual(4);
+    expect(sq.x).toBeLessThanOrEqual(9);
   });
 
   it('works on a dark background too', () => {
@@ -72,11 +112,11 @@ describe('autoCropSquare', () => {
 
   it('falls back to a center crop when the product only covers a speck', () => {
     const img = image(100, 100, WHITE, [{ x: 10, y: 10, w: 3, h: 3, color: RED }]);
-    expect(autoCropSquare(img)).toEqual(centerSquare(100, 100));
+    expect(autoCropSquare(img)).toEqual(centerSquare(100, 100, 0.85));
   });
 
   it('handles empty or short input without throwing', () => {
     expect(autoCropSquare({ data: [], width: 0, height: 0 })).toEqual({ x: 0, y: 0, size: 0 });
-    expect(autoCropSquare({ data: [1, 2, 3, 4], width: 10, height: 10 })).toEqual(centerSquare(10, 10));
+    expect(autoCropSquare({ data: [1, 2, 3, 4], width: 10, height: 10 })).toEqual(centerSquare(10, 10, 0.85));
   });
 });
