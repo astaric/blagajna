@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { DEFAULT_EMOJI, type Product } from '../core/catalog';
+import { DEFAULT_EMOJI, DEFAULT_PRICE_CENTS, type Product } from '../core/catalog';
 import { centsToAmountText, parsePrice } from '../core/money';
 import { button, h, thumb } from './dom';
 import { photoInput } from './photo';
@@ -26,11 +26,12 @@ export function renderProductForm(p: FormProps): HTMLElement {
   code.readOnly = p.editing;
   code.autocomplete = 'off';
   const name = h('input');
-  name.value = p.initial.name ?? '';
+  // New products start with a default name and price, so a photo and Save are enough to play with.
+  name.value = p.initial.name ?? (p.editing ? '' : t('defaultName'));
   name.autocomplete = 'off';
   const price = h('input');
   price.inputMode = 'decimal';
-  price.value = p.initial.priceCents === undefined ? '' : centsToAmountText(p.initial.priceCents);
+  price.value = centsToAmountText(p.initial.priceCents ?? (p.editing ? 0 : DEFAULT_PRICE_CENTS));
   const emoji = h('input', 'emoji-input');
   emoji.value = p.initial.emoji ?? DEFAULT_EMOJI;
   emoji.maxLength = 8;
@@ -97,6 +98,11 @@ export function renderProductForm(p: FormProps): HTMLElement {
       h('div', 'modal-actions', button(t('cancel'), 'big ghost', p.onCancel), button(t('save'), 'big primary', save)),
     ));
   // Focus the first empty field (a scanner can then type the code straight in).
-  queueMicrotask(() => { (code.value === '' ? code : name).focus(); });
+  // (Selecting the default name lets a parent just type over it.)
+  queueMicrotask(() => {
+    if (code.value === '') { code.focus(); return; }
+    name.focus();
+    if (!p.editing) name.select();
+  });
   return root;
 }

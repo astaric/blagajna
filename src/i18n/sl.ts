@@ -48,6 +48,7 @@ export const sl = {
   // product form
   formTitleNew: 'Nov izdelek',
   formTitleEdit: 'Uredi izdelek',
+  defaultName: 'Izdelek',
   fieldCode: 'Črtna koda',
   fieldName: 'Ime',
   fieldPrice: 'Cena (€)',

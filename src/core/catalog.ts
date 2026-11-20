@@ -12,6 +12,8 @@ export interface Product {
 
 export const CATALOG_KEY = 'catalog';
 export const DEFAULT_EMOJI = '🛒';
+/** Prefilled for new products so a photo and Save are enough for kids to play with (2,99 €). */
+export const DEFAULT_PRICE_CENTS = 299;
 
 /** Returns a clean Product or null when the value isn't a valid one. */
 export function parseProduct(raw: unknown): Product | null {
