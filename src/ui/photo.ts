@@ -1,4 +1,5 @@
 import { autoCropSquare } from '../core/autocrop';
+import { h } from './dom';
 
 const SIZE = 160;
 /** The product search runs on a copy this big (longest side); it is plenty to find a grocery item. */
@@ -44,4 +45,23 @@ export async function processPhoto(file: File): Promise<string> {
   g.imageSmoothingQuality = 'high';
   g.drawImage(img, x, y, size, size, 0, 0, SIZE, SIZE);
   return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+/**
+ * A hidden file input that hands over the auto-cropped photo. With `capture` the camera opens directly on iPad
+ * (other browsers just show a file dialog). Call `.click()` from a tap: iOS refuses to open it otherwise.
+ */
+export function photoInput(capture: boolean, onPhoto: (dataUrl: string) => void): HTMLInputElement {
+  const input = h('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  if (capture) input.setAttribute('capture', 'environment');
+  input.hidden = true;
+  input.addEventListener('change', () => {
+    const f = input.files?.[0];
+    input.value = ''; // so taking the same picture again still fires `change`
+    if (!f) return;
+    processPhoto(f).then(onPhoto).catch(() => { /* keep the old picture */ });
+  });
+  return input;
 }

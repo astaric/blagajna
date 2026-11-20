@@ -125,9 +125,9 @@ function onScan(code: string): void {
   const close = (): void => { if (o) popOverlay(o); };
   o = pushOverlay(renderUnknown(
     code,
-    () => {
+    (photo) => {
       close();
-      openForm({ code }, false, (saved) => {
+      openForm({ code, ...(photo ? { photo } : {}) }, false, (saved) => {
         flashCode = saved.code;
         setCart(addProduct(cart, saved));
         renderScreen();

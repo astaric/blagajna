@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { DEFAULT_EMOJI, type Product } from '../core/catalog';
 import { centsToAmountText, parsePrice } from '../core/money';
 import { button, h, thumb } from './dom';
-import { processPhoto } from './photo';
+import { photoInput } from './photo';
 
 export interface FormProps {
   /** Starting values; `editing` locks the code field (the code identifies the product). */
@@ -55,27 +55,13 @@ export function renderProductForm(p: FormProps): HTMLElement {
   renderPreview();
   emoji.addEventListener('input', renderPreview);
 
-  // Two hidden pickers: `capture` opens the camera directly on iPad (other browsers just show a file dialog).
-  const picker = (capture: boolean): HTMLInputElement => {
-    const input = h('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    if (capture) input.setAttribute('capture', 'environment');
-    input.hidden = true;
-    input.addEventListener('change', () => {
-      const f = input.files?.[0];
-      input.value = ''; // so taking the same picture again still fires `change`
-      if (!f) return;
-      processPhoto(f).then((url) => {
-        photo = url;
-        renderPreview();
-        if (name.value.trim() === '') name.focus();
-      }).catch(() => { /* keep the old picture */ });
-    });
-    return input;
+  const onPhoto = (url: string): void => {
+    photo = url;
+    renderPreview();
+    if (name.value.trim() === '') name.focus();
   };
-  const camera = picker(true);
-  const library = picker(false);
+  const camera = photoInput(true, onPhoto);
+  const library = photoInput(false, onPhoto);
 
   const chips = h('div', 'chips', ...SUGGESTED_EMOJI.map((e) =>
     button(e, 'chip emoji', () => { emoji.value = e; renderPreview(); })));
