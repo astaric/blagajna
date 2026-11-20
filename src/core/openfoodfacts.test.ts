@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isBarcode, lookupName, parseOffName } from './openfoodfacts';
+import { isBarcode, lookupProduct, parseOffName, parseOffProduct } from './openfoodfacts';
 
 const found = (product: Record<string, unknown>) => ({ status: 1, product });
 const respond = (body: unknown, ok = true): typeof fetch =>
@@ -40,9 +40,18 @@ describe('openfoodfacts', () => {
     expect(name?.endsWith('…')).toBe(true);
   });
 
+  it('adds an emoji from the categories when one fits', () => {
+    expect(parseOffProduct(found({ product_name: 'DONAT', categories_tags: ['en:beverages', 'en:waters'] })))
+      .toEqual({ name: 'Donat', emoji: '💧' });
+    expect(parseOffProduct(found({ product_name: 'Nutella', categories_tags: ['en:spreads', 'en:chocolate-spreads'] })))
+      .toEqual({ name: 'Nutella', emoji: '🍫' });
+    expect(parseOffProduct(found({ product_name: 'X', categories_tags: 'nope' }))).toEqual({ name: 'X', emoji: null });
+    expect(parseOffProduct({ status: 0 })).toBeNull();
+  });
+
   it('looks a barcode up with a field filter', async () => {
     const fetchImpl = respond(found({ product_name: 'Nutella' }));
-    expect(await lookupName('3017620422003', fetchImpl)).toBe('Nutella');
+    expect(await lookupProduct('3017620422003', fetchImpl)).toEqual({ name: 'Nutella', emoji: null });
     const url = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(url).toContain('/api/v2/product/3017620422003.json');
     expect(url).toContain('fields=');
@@ -50,10 +59,10 @@ describe('openfoodfacts', () => {
 
   it('never throws: network errors, bad statuses and non-barcodes give null', async () => {
     const failing = vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch;
-    expect(await lookupName('3017620422003', failing)).toBeNull();
-    expect(await lookupName('3017620422003', respond({}, false))).toBeNull();
+    expect(await lookupProduct('3017620422003', failing)).toBeNull();
+    expect(await lookupProduct('3017620422003', respond({}, false))).toBeNull();
     const never = vi.fn();
-    expect(await lookupName('not a code', never as unknown as typeof fetch)).toBeNull();
+    expect(await lookupProduct('not a code', never as unknown as typeof fetch)).toBeNull();
     expect(never).not.toHaveBeenCalled();
   });
 
@@ -61,6 +70,6 @@ describe('openfoodfacts', () => {
     const hanging = ((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
     })) as unknown as typeof fetch;
-    expect(await lookupName('3017620422003', hanging, 20)).toBeNull();
+    expect(await lookupProduct('3017620422003', hanging, 20)).toBeNull();
   });
 });

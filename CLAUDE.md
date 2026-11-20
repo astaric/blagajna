@@ -16,7 +16,7 @@ A "fake till" for kids: they scan real groceries with a USB barcode scanner, get
 - Every player-visible string is a key in `src/i18n/sl.ts` (Slovene is allowed only there) and is read with `t()` at render time, never at module load. No inline UI text in `src/ui/`.
 
 ## Architecture
-- `src/core/` — logic that does not touch the DOM beyond `scanner.ts`/`sfx.ts`: `money.ts` (integer cents, `formatEur`, `parsePrice`, number-pad `appendAmountKey`), `cart.ts` (immutable cart functions), `catalog.ts` (`Product`, validation, backup JSON, load/save), `scanner.ts`, `sfx.ts`, `storage.ts`, `autocrop.ts` (pure pixel math for photo auto-crop), `openfoodfacts.ts` (best-effort product-name lookup by barcode; the only network call in the app, never throws; credited in parent mode).
+- `src/core/` — logic that does not touch the DOM beyond `scanner.ts`/`sfx.ts`: `money.ts` (integer cents, `formatEur`, `parsePrice`, number-pad `appendAmountKey`), `cart.ts` (immutable cart functions), `catalog.ts` (`Product`, validation, backup JSON, load/save), `scanner.ts`, `sfx.ts`, `storage.ts`, `autocrop.ts` (pure pixel math for photo auto-crop), `emoji.ts` (hand-written table: Open Food Facts category tags -> emoji, first matching rule wins, specific before general; extend by adding a stem), `openfoodfacts.ts` (best-effort name + emoji lookup by barcode; the only network call in the app, never throws; credited in parent mode).
 - `src/ui/` — screens built with DOM helpers; `src/main.ts` wires state and scanner.
 - Keep logic in Phaser/DOM-free modules and unit-test it; UI files stay thin.
 

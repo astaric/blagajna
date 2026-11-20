@@ -3,7 +3,7 @@ import { addProduct, parseCart, setQty, syncLooks, totalCents, type Cart } from 
 import {
   DEFAULT_EMOJI, DEFAULT_PRICE_CENTS, findByCode, loadCatalog, mergeProducts, removeProduct, saveCatalog, upsert, type Product,
 } from './core/catalog';
-import { isBarcode, lookupName } from './core/openfoodfacts';
+import { isBarcode, lookupProduct, type OffProduct } from './core/openfoodfacts';
 import { attachScanner } from './core/scanner';
 import { play, unlockAudio } from './core/sfx';
 import { readJson, writeJson } from './core/storage';
@@ -136,10 +136,10 @@ function showUnknown(code: string): void {
 }
 
 /** A barcode Open Food Facts knows becomes a product (default price) and goes straight onto the receipt. */
-function autoAdd(code: string, name: string): void {
+function autoAdd(code: string, found: OffProduct): void {
   let product = findByCode(catalog, code);
   if (!product) {
-    product = { code, name, priceCents: DEFAULT_PRICE_CENTS, emoji: DEFAULT_EMOJI };
+    product = { code, name: found.name, priceCents: DEFAULT_PRICE_CENTS, emoji: found.emoji ?? DEFAULT_EMOJI };
     setCatalog(upsert(catalog, product));
   }
   play('scan');
@@ -161,9 +161,9 @@ function onScan(code: string): void {
   if (!isBarcode(code)) { showUnknown(code); return; }
   // Best effort and quick: if Open Food Facts knows the code it is added by itself; otherwise (not found, offline,
   // timeout) the usual "unknown" screen appears. A result that arrives after the sale screen is gone is dropped.
-  void lookupName(code, fetch, LOOKUP_TIMEOUT_MS).then((name) => {
+  void lookupProduct(code, fetch, LOOKUP_TIMEOUT_MS).then((found) => {
     if (screen.kind !== 'sale') return;
-    if (name) { autoAdd(code, name); return; }
+    if (found) { autoAdd(code, found); return; }
     if (overlays.every((o) => o.kind === 'unknown')) { closeUnknown(); showUnknown(code); }
   });
 }
