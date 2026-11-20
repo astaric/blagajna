@@ -89,6 +89,7 @@ export function renderParent(p: ParentProps): ParentView {
       h('header', 'parent-head', h('h2', '', t('parentTitle')),
         h('div', 'row', button(t('addProduct'), 'chip primary', p.onAdd), button(t('close'), 'chip', p.onClose))),
       search, list, backup,
+      h('p', 'muted credit', t('namesCredit')),
       h('div', 'row end', holdButton(t('holdToDeleteAll'), 'chip danger', p.onDeleteAll)),
     ));
 

@@ -1,9 +1,9 @@
 import './style.css';
 import { addProduct, parseCart, setQty, syncLooks, totalCents, type Cart } from './core/cart';
 import {
-  findByCode, loadCatalog, mergeProducts, removeProduct, saveCatalog, upsert, type Product,
+  DEFAULT_EMOJI, DEFAULT_PRICE_CENTS, findByCode, loadCatalog, mergeProducts, removeProduct, saveCatalog, upsert, type Product,
 } from './core/catalog';
-import { lookupName } from './core/openfoodfacts';
+import { isBarcode, lookupName } from './core/openfoodfacts';
 import { attachScanner } from './core/scanner';
 import { play, unlockAudio } from './core/sfx';
 import { readJson, writeJson } from './core/storage';
@@ -15,6 +15,8 @@ import { renderSale } from './ui/sale';
 import { renderUnknown } from './ui/unknown';
 
 const CART_KEY = 'cart';
+/** How long a scan waits for the name lookup before showing the "unknown" screen. */
+const LOOKUP_TIMEOUT_MS = 3000;
 
 type Screen = { kind: 'sale' } | { kind: 'pay' } | { kind: 'done'; changeCents: number };
 interface Overlay { el: HTMLElement; /** 'unknown' overlays stay open for the next scan; everything else blocks scanning. */ kind: 'unknown' | 'modal' }
@@ -114,6 +116,38 @@ function openParent(): void {
   parentView = view;
 }
 
+/** The "I don't know this one" screen: stays open for the next scan; a parent can add the product from here. */
+function showUnknown(code: string): void {
+  play('unknown');
+  let o: Overlay | null = null;
+  const close = (): void => { if (o) popOverlay(o); };
+  o = pushOverlay(renderUnknown(
+    code,
+    (photo) => {
+      close();
+      openForm({ code, ...(photo ? { photo } : {}) }, false, (saved) => {
+        flashCode = saved.code;
+        setCart(addProduct(cart, saved));
+        renderScreen();
+      });
+    },
+    close,
+  ), 'unknown');
+}
+
+/** A barcode Open Food Facts knows becomes a product (default price) and goes straight onto the receipt. */
+function autoAdd(code: string, name: string): void {
+  let product = findByCode(catalog, code);
+  if (!product) {
+    product = { code, name, priceCents: DEFAULT_PRICE_CENTS, emoji: DEFAULT_EMOJI };
+    setCatalog(upsert(catalog, product));
+  }
+  play('scan');
+  flashCode = product.code;
+  setCart(addProduct(cart, product));
+  renderScreen();
+}
+
 function onScan(code: string): void {
   const product = findByCode(catalog, code);
   closeUnknown();
@@ -124,28 +158,13 @@ function onScan(code: string): void {
     renderScreen();
     return;
   }
-  play('unknown');
-  let o: Overlay | null = null;
-  let suggestedName: string | undefined;
-  const close = (): void => { if (o) popOverlay(o); };
-  const view = renderUnknown(
-    code,
-    (photo) => {
-      close();
-      openForm({ code, ...(suggestedName ? { name: suggestedName } : {}), ...(photo ? { photo } : {}) }, false, (saved) => {
-        flashCode = saved.code;
-        setCart(addProduct(cart, saved));
-        renderScreen();
-      });
-    },
-    close,
-  );
-  o = pushOverlay(view.el, 'unknown');
-  // Best effort: a known barcode gets its name suggested; offline or not found just leaves the default name.
-  void lookupName(code).then((name) => {
-    if (!name || !overlays.includes(o!)) return;
-    suggestedName = name;
-    view.suggest(name);
+  if (!isBarcode(code)) { showUnknown(code); return; }
+  // Best effort and quick: if Open Food Facts knows the code it is added by itself; otherwise (not found, offline,
+  // timeout) the usual "unknown" screen appears. A result that arrives after the sale screen is gone is dropped.
+  void lookupName(code, fetch, LOOKUP_TIMEOUT_MS).then((name) => {
+    if (screen.kind !== 'sale') return;
+    if (name) { autoAdd(code, name); return; }
+    if (overlays.every((o) => o.kind === 'unknown')) { closeUnknown(); showUnknown(code); }
   });
 }
 

@@ -25,8 +25,6 @@ export const sl = {
   unknownTitle: 'Tega izdelka še ne poznam',
   unknownHint: 'Pokliči starša, da ga doda.',
   unknownCode: 'Koda: {code}',
-  unknownFound: 'Najdeno: {name}',
-  unknownSource: 'Vir: Open Food Facts',
   holdToAdd: 'Dodaj izdelek (drži)',
   close: 'Zapri',
   // parent
@@ -35,6 +33,7 @@ export const sl = {
   search: 'Išči po imenu ali kodi',
   noProducts: 'Še ni izdelkov. Skeniraj izdelek ali pa ga dodaj.',
   addProduct: 'Dodaj izdelek',
+  namesCredit: 'Imena izdelkov za nove črtne kode: Open Food Facts (odprti podatki)',
   edit: 'Uredi',
   holdToDelete: 'Izbriši (drži)',
   holdToDeleteAll: 'Izbriši vse (drži)',
