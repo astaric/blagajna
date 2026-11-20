@@ -25,6 +25,8 @@ export const sl = {
   unknownTitle: 'Tega izdelka še ne poznam',
   unknownHint: 'Pokliči starša, da ga doda.',
   unknownCode: 'Koda: {code}',
+  unknownFound: 'Najdeno: {name}',
+  unknownSource: 'Vir: Open Food Facts',
   holdToAdd: 'Dodaj izdelek (drži)',
   close: 'Zapri',
   // parent

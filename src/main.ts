@@ -3,6 +3,7 @@ import { addProduct, parseCart, setQty, syncLooks, totalCents, type Cart } from 
 import {
   findByCode, loadCatalog, mergeProducts, removeProduct, saveCatalog, upsert, type Product,
 } from './core/catalog';
+import { lookupName } from './core/openfoodfacts';
 import { attachScanner } from './core/scanner';
 import { play, unlockAudio } from './core/sfx';
 import { readJson, writeJson } from './core/storage';
@@ -125,19 +126,27 @@ function onScan(code: string): void {
   }
   play('unknown');
   let o: Overlay | null = null;
+  let suggestedName: string | undefined;
   const close = (): void => { if (o) popOverlay(o); };
-  o = pushOverlay(renderUnknown(
+  const view = renderUnknown(
     code,
     (photo) => {
       close();
-      openForm({ code, ...(photo ? { photo } : {}) }, false, (saved) => {
+      openForm({ code, ...(suggestedName ? { name: suggestedName } : {}), ...(photo ? { photo } : {}) }, false, (saved) => {
         flashCode = saved.code;
         setCart(addProduct(cart, saved));
         renderScreen();
       });
     },
     close,
-  ), 'unknown');
+  );
+  o = pushOverlay(view.el, 'unknown');
+  // Best effort: a known barcode gets its name suggested; offline or not found just leaves the default name.
+  void lookupName(code).then((name) => {
+    if (!name || !overlays.includes(o!)) return;
+    suggestedName = name;
+    view.suggest(name);
+  });
 }
 
 attachScanner(onScan, () => screen.kind === 'sale' && overlays.every((o) => o.kind === 'unknown'));

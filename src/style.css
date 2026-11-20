@@ -116,6 +116,8 @@ input:read-only { background: #f4ecd6; }
 .unknown-icon { font-size: 80px; }
 .unknown h2 { font-size: 36px; }
 .unknown p { margin: 0; }
+.suggestion { display: flex; flex-direction: column; gap: 2px; font-size: 22px; }
+.suggestion small { color: var(--muted); font-size: 14px; }
 .code { font-family: ui-monospace, monospace; color: var(--muted); }
 
 /* product form */
