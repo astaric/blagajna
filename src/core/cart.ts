@@ -24,6 +24,23 @@ export function addProduct(cart: Cart, product: Product): Cart {
   return [...cart, line];
 }
 
+/**
+ * Copies the picture (photo/emoji) of each line's product from the catalog, so a retaken photo shows on a running
+ * receipt. Name and price stay as snapshotted. Lines whose product was deleted are left alone. Returns the same
+ * cart object when nothing changed.
+ */
+export function syncLooks(cart: Cart, products: readonly Product[]): Cart {
+  let changed = false;
+  const next = cart.map((line) => {
+    const p = products.find((x) => x.code === line.code);
+    if (!p || (p.emoji === line.emoji && p.photo === line.photo)) return line;
+    changed = true;
+    const { photo: _old, ...rest } = line;
+    return { ...rest, emoji: p.emoji, ...(p.photo ? { photo: p.photo } : {}) };
+  });
+  return changed ? next : cart;
+}
+
 /** Quantity 0 (or less) removes the line; quantities are capped at MAX_QTY. */
 export function setQty(cart: Cart, code: string, qty: number): Cart {
   if (qty <= 0) return removeLine(cart, code);

@@ -1,5 +1,5 @@
 import './style.css';
-import { addProduct, parseCart, setQty, totalCents, type Cart } from './core/cart';
+import { addProduct, parseCart, setQty, syncLooks, totalCents, type Cart } from './core/cart';
 import {
   findByCode, loadCatalog, mergeProducts, removeProduct, saveCatalog, upsert, type Product,
 } from './core/catalog';
@@ -40,6 +40,9 @@ function setCatalog(next: Product[]): void {
   catalog = next;
   saveCatalog(catalog);
   parentView?.refresh();
+  // A retaken photo should show on the running receipt too (name and price stay as scanned).
+  const synced = syncLooks(cart, catalog);
+  if (synced !== cart) { setCart(synced); renderScreen(); }
 }
 
 function renderScreen(): void {

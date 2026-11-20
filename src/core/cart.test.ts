@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addProduct, MAX_QTY, parseCart, removeLine, setQty, totalCents } from './cart';
+import { addProduct, MAX_QTY, parseCart, removeLine, setQty, syncLooks, totalCents } from './cart';
 import type { Product } from './catalog';
 
 const milk: Product = { code: '111', name: 'Mleko', priceCents: 129, emoji: '🥛' };
@@ -35,6 +35,23 @@ describe('cart', () => {
     milk.priceCents = 999;
     expect(totalCents(cart)).toBe(129);
     milk.priceCents = 129;
+  });
+
+  it('shows a retaken photo on the receipt but keeps the scanned name and price', () => {
+    const cart = addProduct(addProduct([], milk), bread);
+    const photo = 'data:image/jpeg;base64,BB';
+    const edited = syncLooks(cart, [{ ...milk, name: 'Polnomastno mleko', priceCents: 999, photo }, bread]);
+    expect(edited[0]).toMatchObject({ code: '111', name: 'Mleko', priceCents: 129, photo });
+    expect(edited[1]).toBe(cart[1]);
+    // Removing the photo falls back to the emoji.
+    const removed = syncLooks(edited, [milk, bread]);
+    expect(removed[0]).not.toHaveProperty('photo');
+  });
+
+  it('leaves the cart alone when the looks are unchanged or the product was deleted', () => {
+    const cart = addProduct(addProduct([], milk), bread);
+    expect(syncLooks(cart, [milk, bread])).toBe(cart);
+    expect(syncLooks(cart, [bread])).toBe(cart);
   });
 
   it('round-trips through parseCart and rejects garbage', () => {
